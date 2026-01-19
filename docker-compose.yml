@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: dropshipping-db
+    environment:
+      POSTGRES_USER: dropshipping_user
+      POSTGRES_PASSWORD: dropshipping_pass
+      POSTGRES_DB: dropshipping_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dropshipping_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (Node.js)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dropshipping-api
+    environment:
+      DATABASE_URL: postgresql://dropshipping_user:dropshipping_pass@db:5432/dropshipping_dev
+      NODE_ENV: development
+      PORT: 3001
+      JWT_SECRET: your-jwt-secret-key-change-in-production
+      STRIPE_SECRET_KEY: sk_test_your_key
+      STRIPE_PUBLISHABLE_KEY: pk_test_your_key
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dropshipping-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_STRIPE_KEY: pk_test_your_key
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: dropshipping-network
